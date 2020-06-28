@@ -1,8 +1,10 @@
 const mongoose = require('mongoose');
 const validator = require('validator');
+const slugify = require('slugify');
+const geoCoder = require('../utils/geocoder');
 
-const jobSchema = new mongoose.schema({
-    title: {
+const jobSchema = new mongoose.Schema({
+    title : {
         type : String,
         required : [true, 'Please enter Job title.'],
         trim : true,
@@ -11,7 +13,7 @@ const jobSchema = new mongoose.schema({
     slug : String,
     description : {
         type : String,
-        required : [true, 'Please enter the job description.'],
+        required : [true, 'Please enter Job description.'],
         maxlength : [1000, 'Job description can not exceed 1000 characters.']
     },
     email : {
@@ -20,7 +22,22 @@ const jobSchema = new mongoose.schema({
     },
     address : {
         type : String,
-        required : [true,'Please add an address.']
+        required : [true, 'Please add an address.']
+    },
+    location :{
+        type : {
+            type : String,
+            enum : ['Point']
+        },
+        coordinates : {
+            type : [Number],
+            index : '2dsphere'
+        },
+        formattedAddress : String,
+        city : String,
+        state : String,
+        zipcode : String,
+        country : String
     },
     company : {
         type : String,
@@ -28,7 +45,7 @@ const jobSchema = new mongoose.schema({
     },
     industry : {
         type : [String],
-        required : true,
+        required : [true , 'Please enter industry for this job.'],
         enum : {
             values : [
                 'Business',
@@ -38,24 +55,24 @@ const jobSchema = new mongoose.schema({
                 'Telecommunication',
                 'Others'
             ],
-            message : 'Please select correct option for Industry.'
+            message : 'Please select correct options for industry.'
         }
     },
     jobType : {
         type : String,
-        required : true,
+        required : [true, 'Please enter job type.'],
         enum : {
             values : [
                 'Permanent',
-                'Part Time',
+                'Temporary',
                 'Internship'
             ],
             message : 'Please select correct options for job type.'
         }
     },
     minEducation : {
-        type: String,
-        required : true,
+        type : String,
+        required : [true, 'Please enter minimum education for this job.'],
         enum : {
             values : [
                 'Bachelors',
@@ -70,14 +87,14 @@ const jobSchema = new mongoose.schema({
         default : 1
     },
     experience : {
-        type : String, 
-        required : true,
+        type : String,
+        required : [true, 'Please enter experience required for this job.'],
         enum : {
             values : [
-                'No Experience / Fresher',
+                'No Experience',
                 '1 Year - 2 Years',
-                '2 Years - 5 Years',
-                'More than 5 Years'
+                '2 Year - 5 Years',
+                '5 Years+'
             ],
             message : 'Please select correct options for Experience.'
         }
@@ -92,13 +109,41 @@ const jobSchema = new mongoose.schema({
     },
     lastDate : {
         type : Date,
-        default : newDate().setDate(newDate().getDate() + 7)
+        default : new Date().setDate(new Date().getDate() + 7)
     },
     applicantsApplied : {
-        type :[Object],
+        type : [Object],
         select : false
+    },
+    user : {
+        type : mongoose.Schema.ObjectId,
+        ref : 'User',
+        required : true
+    }
+});
+
+// Creating Job Slug before saving
+jobSchema.pre('save', function(next) {
+    // Creating slug before saving to DB
+    this.slug = slugify(this.title, {lower : true});
+
+    next();
+});
+
+// Setting up Location
+jobSchema.pre('save', async function(next) {
+    const loc = await geoCoder.geocode(this.address);
+
+    this.location = {
+        type : 'Point',
+        coordinates : [loc[0].longitude, loc[0].latitude],
+        formattedAddress : loc[0].formattedAddress,
+        city : loc[0].city,
+        state : loc[0].stateCode,
+        zipcode : loc[0].zipcode,
+        country : loc[0].countryCode
     }
 });
 
 
-module.exports = mongoose.model('Job',jobSchema);
+module.exports = mongoose.model('Job', jobSchema);
